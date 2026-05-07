@@ -1,0 +1,87 @@
+name: Enigma Labs
+tagline: "Built to ship. Engineered to last."
+positioning: >-
+  We deploy AI workflows, custom software, and websites for companies wanting
+  to turn AI into a competitive edge.
+website: https://enigmalabs.dev
+contact_email: hello@enigmalabs.dev
+
+services:
+  - name: SaaS & Product Engineering
+    short: end-to-end SaaS builds
+    desc: >-
+      We build robust SaaS products end to end — UI, billing, dashboards, and
+      infrastructure. From ten users to ten thousand. Founder-led ideas,
+      internal tools, customer-facing platforms — whatever the shape, we
+      engineer it cleanly and ship it.
+  - name: AI Workflow Automation
+    short: custom AI agents and workflows
+    desc: >-
+      Custom AI agents and workflows that complement your team by handling
+      repeatable tasks on autopilot. Free your team for work that actually
+      moves the business forward. AI integration cuts development time by 13%
+      (Harvard Business School).
+  - name: Web Development
+    short: high-conversion marketing sites
+    desc: >-
+      Fast, polished, professional web experiences. Marketing sites,
+      e-commerce, product pages — built to rank and convert.
+
+target_industries:
+  - SaaS
+  - E-commerce
+  - Fintech
+  - Real Estate
+  - Healthcare
+  - Logistics
+  - Marketing Agencies
+  - Legal
+  - Education
+  - Hospitality
+
+differentiators:
+  - "Idea to production in 6 days average"
+  - "Founders stay close to the code"
+  - "Engineers and designers from NYU and Columbia"
+  - "Tool-agnostic — Anthropic to Airtable"
+  - "100% client satisfaction"
+  - "105+ hours per month saved across clients"
+  - "Code that's reviewed, tested, and ready to scale"
+
+objection_responses:
+  pricing: >-
+    Pricing is custom and project-based — depends on scope, integrations, and
+    timeline. The discovery call is where we scope it precisely. Most projects
+    fall in a healthy mid-five-figure range, but we never quote without
+    understanding the problem first.
+  agency_burned_before: >-
+    Fair concern — too many agencies sell with pitch decks and disappear in
+    the build phase. Our model is the opposite. Founders stay close to the
+    code, ship in days, and stand behind what we deliver.
+  timeline_concern: >-
+    Average idea-to-production is six days for focused scope. Larger projects
+    move in shippable weekly increments — you see real product every Monday,
+    not slideware.
+  not_sure_if_ai_fits: >-
+    That's exactly what the discovery call is for. Fifteen minutes, no slides
+    — we listen to the workflow, flag where AI actually moves the needle, and
+    pass on it honestly if it doesn't.
+
+tone: >-
+  Professional, direct, outcome-obsessed. Lead with speed and quality.
+  Reference specific outcomes (six-day turnaround, hours saved, satisfaction
+  rate). Avoid generic agency language. Ground in technical credibility.
+  No pitch-deck filler.
+
+booking:
+  intent: 15-minute discovery call to scope the problem
+  what_to_collect:
+    - full name
+    - work email (spell it back to confirm)
+    - phone number (spell it back to confirm)
+    - company name
+    - one-sentence problem they want solved
+    - rough timeline (this month / this quarter / exploring)
+  follow_up: >-
+    After booking, the founder replies within one business day with a brief
+    agenda for the call.
