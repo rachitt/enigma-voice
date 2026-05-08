@@ -1,18 +1,13 @@
 # LiveKit SIP Setup
 
-Use this walkthrough to wire Twilio SIP trunks into LiveKit Cloud for inbound
-and outbound calling.
+Wire Telnyx SIP into LiveKit Cloud for inbound + outbound calling. Pairs with `docs/telnyx-setup.md` (run that first).
 
 ## 1. Install the LiveKit CLI
 
-Install the LiveKit CLI with pip:
-
 ```bash
-pip install livekit-cli
+brew install livekit-cli
+# or: curl -sSL https://get.livekit.io/cli | bash
 ```
-
-Alternatively, download it from
-[github.com/livekit/livekit-cli](https://github.com/livekit/livekit-cli).
 
 ## 2. Authenticate with LiveKit Cloud
 
@@ -20,48 +15,53 @@ Alternatively, download it from
 lk cloud auth
 ```
 
-## 3. Create the inbound trunk
+## 3. Find your LiveKit SIP signaling URI
 
-Create `inbound-trunk.yaml`:
+```bash
+lk project list
+lk sip status
+```
+Copy the **SIP URI** (looks like `<project>.sip.livekit.cloud`). Paste into Telnyx SIP Connection's FQDN field (`docs/telnyx-setup.md` step 5).
+
+## 4. Create the inbound trunk
+
+`inbound-trunk.yaml`:
 
 ```yaml
 trunk:
   name: enigma-voice-inbound
-  numbers: ["+15555550123"] # your Twilio number
+  numbers: ["+1XXXXXXXXXX"]   # your Telnyx number
   auth_username: ""
   auth_password: ""
 ```
 
-Create the trunk:
-
 ```bash
 lk sip inbound create inbound-trunk.yaml
-# returns SIP_INBOUND_TRUNK_ID, paste into .env
+# returns SIP_INBOUND_TRUNK_ID -> paste into .env
 ```
 
-## 4. Create the outbound trunk
+## 5. Create the outbound trunk
 
-Create `outbound-trunk.yaml`:
+`outbound-trunk.yaml`:
 
 ```yaml
 trunk:
   name: enigma-voice-outbound
-  address: <twilio-trunk-termination-uri>.pstn.twilio.com
-  numbers: ["+15555550123"]
-  auth_username: <twilio-trunk-cred-username>
-  auth_password: <twilio-trunk-cred-password>
+  address: sip.telnyx.com
+  numbers: ["+1XXXXXXXXXX"]
+  auth_username: <TELNYX_SIP_USERNAME>   # from telnyx-setup.md step 6
+  auth_password: <TELNYX_SIP_PASSWORD>
+  transport: TLS
 ```
-
-Create the trunk:
 
 ```bash
 lk sip outbound create outbound-trunk.yaml
-# returns SIP_OUTBOUND_TRUNK_ID
+# returns SIP_OUTBOUND_TRUNK_ID -> paste into .env
 ```
 
-## 5. Create the inbound dispatch rule
+## 6. Create the inbound dispatch rule
 
-Create `dispatch-rule.yaml`:
+`dispatch-rule.yaml`:
 
 ```yaml
 rule:
@@ -73,13 +73,32 @@ room_config:
     - agent_name: enigma-voice
 ```
 
-Create the dispatch rule:
-
 ```bash
 lk sip dispatch create dispatch-rule.yaml
 ```
 
-## 6. Verify inbound calling
+## 7. Verify inbound
 
-Place a test call to the Twilio number. LiveKit logs should show an inbound SIP
-participant and an agent dispatch.
+Dial your Telnyx number from your cell. LiveKit logs:
+```bash
+lk room list
+```
+Should show inbound SIP participant + agent dispatch.
+
+## 8. Verify outbound
+
+Run agent worker + outbound API in two shells:
+```bash
+python agent.py dev
+uvicorn outbound.server:app --port 8000
+```
+
+Trigger a call to your own cell:
+```bash
+curl -X POST http://localhost:8000/calls/outbound \
+  -H "X-API-Key: $OUTBOUND_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"phone":"+1YOURCELL","name":"Test","context":"smoke"}'
+```
+
+Phone rings. Agent opens with greeting + lead context.
