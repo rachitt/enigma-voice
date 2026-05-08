@@ -91,7 +91,7 @@ async def list_available_slots(days_ahead: int = 5, timezone: str = "America/New
         "timeZone": timezone,
     }
     async with httpx.AsyncClient(timeout=10.0) as client:
-        response = await client.get(f"{base_url}/slots", params=params, headers=_headers(api_key))
+        response = await client.get(f"{base_url}/slots/available", params=params, headers=_headers(api_key))
         try:
             response.raise_for_status()
         except httpx.HTTPStatusError:
