@@ -3,8 +3,8 @@ import json
 import logging
 import os
 
-import httpx
 from dotenv import load_dotenv
+from livekit import rtc
 from livekit.agents import (
     Agent,
     AgentSession,
@@ -17,9 +17,12 @@ from livekit.agents import (
     function_tool,
 )
 from livekit.agents.voice.agent_session import SessionConnectOptions
-from livekit.plugins import deepgram, elevenlabs, openai, silero
+from livekit.plugins import silero
 
-from tools.business import get_services, render_system_prompt
+from config import build_llm, build_stt, build_tts, render_system_prompt
+from tools.business import get_services
+from tools.email import send_booking_email
+from tools.transfer import transfer_call_tool
 
 load_dotenv(override=True)
 logger = logging.getLogger("enigma-voice")
@@ -34,30 +37,10 @@ async def get_services_tool(ctx: RunContext) -> str:
     return "\n".join(f"- {s['name']}: {s['short']}" for s in services)
 
 
-async def _send_sms(caller_phone: str) -> tuple[bool, str]:
-    booking_link = os.environ.get("BOOKING_LINK", "")
-    if not booking_link or not caller_phone:
-        return False, "missing booking link or caller phone"
-    payload = {
-        "from": os.environ["TELNYX_PHONE_NUMBER"],
-        "to": caller_phone,
-        "text": f"Hey, this is Aria from Enigma Labs. Grab a 15-min slot here whenever works for you: {booking_link}",
-        "messaging_profile_id": os.environ["TELNYX_MESSAGING_PROFILE_ID"],
-    }
-    headers = {"Authorization": f"Bearer {os.environ['TELNYX_API_KEY']}", "Content-Type": "application/json"}
-    async with httpx.AsyncClient(timeout=10.0) as client:
-        r = await client.post("https://api.telnyx.com/v2/messages", json=payload, headers=headers)
-    logger.info("Telnyx SMS resp: status=%d body=%s", r.status_code, r.text[:300])
-    if r.status_code >= 400:
-        return False, f"telnyx {r.status_code}: {r.text[:200]}"
-    return True, "ok"
-
-
 async def _drain_and_close(session, timeout: float = 30.0):
     """Wait until any pending TTS finishes streaming, then close the session."""
     import time
     deadline = time.time() + timeout
-    # Give the LLM a beat to start generating its closing turn.
     await asyncio.sleep(0.4)
     while time.time() < deadline:
         speech = session.current_speech
@@ -67,7 +50,6 @@ async def _drain_and_close(session, timeout: float = 30.0):
             await speech.wait_for_playout()
         except Exception:
             await asyncio.sleep(0.2)
-    # Extra drain for SIP audio buffer.
     await asyncio.sleep(0.6)
     try:
         await session.aclose()
@@ -75,23 +57,44 @@ async def _drain_and_close(session, timeout: float = 30.0):
         logger.exception("session close failed")
 
 
+def _normalize_email(raw: str) -> str:
+    """Strip whitespace and common STT noise (' at ' -> '@', ' dot ' -> '.', spaces between letters)."""
+    s = raw.strip().lower()
+    s = s.replace(" at ", "@").replace(" dot ", ".")
+    s = s.replace(" ", "")
+    return s
+
+
 @function_tool
-async def book_and_close_tool(ctx: RunContext) -> str:
-    """Use this whenever the caller agrees to book — texts the Cal.com link to their phone AND ends the call gracefully.
-    This is the ONLY booking action. Never call any other tool to book. After this returns, the call will hang up automatically."""
-    caller_phone = ctx.session.userdata.get("caller_phone") if ctx.session.userdata else ""
-    logger.info("book_and_close: target=%r", caller_phone)
+async def book_with_email_tool(ctx: RunContext, email: str) -> str:
+    """Email the Cal.com booking link to the caller AND end the call gracefully.
 
-    ok, detail = await _send_sms(caller_phone)
+    Call this **once** when (a) the caller has agreed to book, (b) they have spoken their email,
+    (c) you have spelled the email back to them letter-by-letter, and (d) they have explicitly confirmed it.
+    Never call this without spell-back confirmation. After this returns, the call hangs up automatically.
+
+    Args:
+        email: The confirmed email address as a single normalized string (e.g. 'meyhar@gmail.com').
+    """
+    cleaned = _normalize_email(email)
+    if "@" not in cleaned or "." not in cleaned.split("@")[-1]:
+        return f"Email '{cleaned}' looks invalid. Ask the caller to spell it letter-by-letter again, spell it back, get confirmation, then call this tool with the corrected value."
+
+    ud = ctx.session.userdata or {}
+    lead_name = ud.get("lead_name", "")
+    logger.info("book_with_email: target=%s lead=%s", cleaned, lead_name)
+
+    ok, detail = await send_booking_email(cleaned, lead_name)
     if not ok:
-        logger.error("SMS failed: %s", detail)
+        logger.error("Resend failed: %s", detail)
         asyncio.create_task(_drain_and_close(ctx.session))
-        return ("SMS failed - say: 'Hmm, I'm having trouble texting you. Please email hello@enigmalabs.dev to book. "
-                "Have a great day!' Then stop talking.")
+        return ("Email failed - say: 'Hmm, I'm having trouble sending the email. "
+                "Please email hello@enigmalabs.dev to book. Have a great day!' Then stop talking.")
 
+    ctx.session.userdata["caller_email"] = cleaned
     asyncio.create_task(_drain_and_close(ctx.session))
-    return ("SMS sent. NOW say this exact line and stop: "
-            "'Sent! Keep an eye out for that text. Have a great rest of your day!' "
+    return ("Email sent. NOW say this exact line and stop: "
+            "'Sent! Keep an eye on your inbox for the booking link. Have a great rest of your day!' "
             "Do not say anything else. The call hangs up automatically after.")
 
 
@@ -121,6 +124,8 @@ async def entrypoint(ctx: JobContext):
     lead_name = md.get("lead_name", "")
     context_brief = md.get("context", "")
     caller_phone = md.get("phone", "")
+    voice_id = md.get("voice_id") or None
+    llm_model = md.get("llm_model") or None
 
     system = render_system_prompt()
     call_block = "\n\n## This call\n"
@@ -135,38 +140,36 @@ async def entrypoint(ctx: JobContext):
 
     agent = Agent(
         instructions=system,
-        tools=[get_services_tool, book_and_close_tool, end_call_tool],
+        tools=[get_services_tool, book_with_email_tool, end_call_tool, transfer_call_tool],
     )
 
     session = AgentSession(
-        stt=deepgram.STT(
-            model="nova-3",
-            language="en-US",
-            interim_results=True,
-            smart_format=True,
-            endpointing_ms=25,
-            punctuate=True,
-        ),
-        llm=openai.LLM(
-            base_url=os.environ["LLM_BASE_URL"],
-            api_key=os.environ["LLM_API_KEY"],
-            model=os.environ["LLM_MODEL"],
-            temperature=0.3,
-            timeout=httpx.Timeout(30.0),
-            _strict_tool_schema=False,
-        ),
-        tts=elevenlabs.TTS(
-            voice_id=os.environ.get("ELEVENLABS_VOICE_ID", "21m00Tcm4TlvDq8ikWAM"),
-            model="eleven_flash_v2_5",
-            encoding="pcm_16000",
-        ),
+        stt=build_stt(),
+        llm=build_llm(llm_model),
+        tts=build_tts(voice_id),
         vad=ctx.proc.userdata.get("vad") or silero.VAD.load(),
         preemptive_generation=True,
-        userdata={"caller_phone": caller_phone, "lead_name": lead_name, "direction": direction},
+        userdata={
+            "caller_phone": caller_phone,
+            "caller_email": "",
+            "lead_name": lead_name,
+            "direction": direction,
+            "sip_participant_identity": None,
+        },
         conn_options=SessionConnectOptions(
             llm_conn_options=APIConnectOptions(timeout=25.0, max_retry=1),
         ),
     )
+
+    @ctx.room.on("participant_connected")
+    def _on_participant(participant: rtc.RemoteParticipant):
+        if participant.kind == rtc.ParticipantKind.PARTICIPANT_KIND_SIP:
+            session.userdata["sip_participant_identity"] = participant.identity
+            logger.info("SIP participant joined: identity=%s", participant.identity)
+
+    for p in ctx.room.remote_participants.values():
+        if p.kind == rtc.ParticipantKind.PARTICIPANT_KIND_SIP:
+            session.userdata["sip_participant_identity"] = p.identity
 
     await session.start(
         agent=agent,
@@ -198,5 +201,6 @@ if __name__ == "__main__":
             agent_name="enigma-voice",
             prewarm_fnc=prewarm,
             num_idle_processes=1,
+            port=8089,
         )
     )
