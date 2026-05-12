@@ -1,8 +1,8 @@
 export type VoiceOption = { id: string; label: string };
 
 export const VOICES: VoiceOption[] = [
-  { id: "pNInz6obpgDQGcFmaJgB", label: "Adam (default)" },
-  { id: "21m00Tcm4TlvDq8ikWAM", label: "Rachel" },
+  { id: "21m00Tcm4TlvDq8ikWAM", label: "Rachel (default)" },
+  { id: "pNInz6obpgDQGcFmaJgB", label: "Adam" },
   { id: "AZnzlk1XvdvUeBnXmlld", label: "Domi" },
   { id: "EXAVITQu4vr4xnSDxMaL", label: "Bella" },
   { id: "ErXwobaYiN019PkySvjV", label: "Antoni" },

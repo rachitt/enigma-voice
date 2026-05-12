@@ -2,6 +2,7 @@ import asyncio
 import json
 import logging
 import os
+import re
 
 from dotenv import load_dotenv
 from livekit import rtc
@@ -57,39 +58,118 @@ async def _drain_and_close(session, timeout: float = 30.0):
         logger.exception("session close failed")
 
 
+_EMAIL_RE = re.compile(r"[a-z0-9._%+\-]+@[a-z0-9.\-]+\.[a-z]{2,}")
+_TLD_BOUNDED = re.compile(r"[a-z0-9._%+\-]+@[a-z0-9.\-]+?\.[a-z]{2,10}(?![a-z])")
+
+
 def _normalize_email(raw: str) -> str:
-    """Strip whitespace and common STT noise (' at ' -> '@', ' dot ' -> '.', spaces between letters)."""
+    """Aggressively clean an STT-derived email string into a syntactically valid address."""
+    if not raw:
+        return ""
     s = raw.strip().lower()
-    s = s.replace(" at ", "@").replace(" dot ", ".")
-    s = s.replace(" ", "")
-    return s
+    s = s.replace("’", "'").replace("—", "-").replace("–", "-")
+    s = re.sub(r"[,;:!?]", " ", s)
+    # 0) collapse runs of single letters separated by whitespace ("m e y h a r" -> "meyhar")
+    #    do this BEFORE word substitutions so "underscore" between letter-runs survives
+    s = re.sub(r"(?:\b[a-z]\b\s+){2,}\b[a-z]\b", lambda m: m.group(0).replace(" ", ""), s)
+    # word-form replacements
+    s = re.sub(r"\s+at\s+", "@", s)
+    s = re.sub(r"\s+dot\s+", ".", s)
+    s = re.sub(r"\s+underscore\s+", "_", s)
+    s = re.sub(r"\s+(dash|hyphen|minus)\s+", "-", s)
+    s_letters = s
+    # 2) try TLD-bounded match on letter-collapsed string
+    m = _TLD_BOUNDED.search(s_letters)
+    if m:
+        return m.group(0)
+    # 3) post-substitution unchanged
+    m = _TLD_BOUNDED.search(s)
+    if m:
+        return m.group(0)
+    # 4) full collapse (last-resort for STT that drops all spacing)
+    collapsed_full = re.sub(r"\s+", "", s)
+    m = _TLD_BOUNDED.search(collapsed_full)
+    if m:
+        return m.group(0)
+    # 5) greedy fallback
+    for cand_str in (collapsed_full, raw.lower().replace(" ", "")):
+        m = _EMAIL_RE.search(cand_str)
+        if m:
+            return m.group(0)
+    # 4) try splitting around @ and trimming local-part to the trailing word
+    if "@" in collapsed_full:
+        local, _, domain = collapsed_full.partition("@")
+        # take only trailing run of valid local-part chars
+        ml = re.search(r"[a-z0-9._%+\-]+$", local)
+        if ml:
+            local = ml.group(0)
+        # collapse spelled-letter dots in local part
+        for sep in (".", "-"):
+            segs = local.split(sep)
+            if len(segs) > 2 and all(len(seg) <= 2 for seg in segs):
+                local = "".join(segs)
+        cand = f"{local}@{domain}"
+        m = _EMAIL_RE.search(cand)
+        if m:
+            return m.group(0)
+        return cand
+    return collapsed_full
+
+
+def _scan_history_for_email(session) -> str:
+    """Walk chat history newest→oldest, return the most recent email-shaped string from a user turn."""
+    try:
+        items = list(session.history.items)
+    except Exception:
+        return ""
+    for item in reversed(items):
+        if getattr(item, "role", None) != "user":
+            continue
+        text = ""
+        try:
+            text = item.text_content or ""
+        except Exception:
+            text = ""
+        if not text:
+            continue
+        cand = _normalize_email(text)
+        if _EMAIL_RE.fullmatch(cand):
+            return cand
+    return ""
 
 
 @function_tool
 async def book_with_email_tool(ctx: RunContext, email: str) -> str:
-    """Email the Cal.com booking link to the caller AND end the call gracefully.
-
-    Call this **once** when (a) the caller has agreed to book, (b) they have spoken their email,
-    (c) you have spelled the email back to them letter-by-letter, and (d) they have explicitly confirmed it.
-    Never call this without spell-back confirmation. After this returns, the call hangs up automatically.
+    """Email the booking link to the caller and end the call. Call this immediately after the caller confirms their email.
 
     Args:
-        email: The confirmed email address as a single normalized string (e.g. 'meyhar@gmail.com').
+        email: The confirmed email address, e.g. 'meyhar@gmail.com'.
     """
     cleaned = _normalize_email(email)
-    if "@" not in cleaned or "." not in cleaned.split("@")[-1]:
-        return f"Email '{cleaned}' looks invalid. Ask the caller to spell it letter-by-letter again, spell it back, get confirmation, then call this tool with the corrected value."
+    fallback = ""
+    if not _EMAIL_RE.fullmatch(cleaned):
+        fallback = ctx.session.userdata.get("last_email_candidate", "") or _scan_history_for_email(ctx.session)
+    logger.info("book_with_email called: raw=%r cleaned=%r fallback=%r", email, cleaned, fallback)
+
+    if not _EMAIL_RE.fullmatch(cleaned):
+        if _EMAIL_RE.fullmatch(fallback):
+            logger.info("using history fallback email: %s", fallback)
+            cleaned = fallback
+        else:
+            logger.warning("invalid email after normalize: raw=%r cleaned=%r", email, cleaned)
+            return (f"Email '{cleaned}' looks invalid. Ask the caller to spell it letter-by-letter again, "
+                    "spell it back, get confirmation, then call this tool with the corrected value.")
 
     ud = ctx.session.userdata or {}
     lead_name = ud.get("lead_name", "")
-    logger.info("book_with_email: target=%s lead=%s", cleaned, lead_name)
+    logger.info("sending booking email: target=%s lead=%s", cleaned, lead_name)
 
     ok, detail = await send_booking_email(cleaned, lead_name)
     if not ok:
-        logger.error("Resend failed: %s", detail)
+        logger.error("Resend failed: cleaned=%s detail=%s", cleaned, detail)
         asyncio.create_task(_drain_and_close(ctx.session))
         return ("Email failed - say: 'Hmm, I'm having trouble sending the email. "
-                "Please email hello@enigmalabs.dev to book. Have a great day!' Then stop talking.")
+                "Please reach us at contact@itsenigma.org to book. Have a great day!' Then stop talking.")
 
     ctx.session.userdata["caller_email"] = cleaned
     asyncio.create_task(_drain_and_close(ctx.session))
@@ -167,6 +247,35 @@ async def entrypoint(ctx: JobContext):
             session.userdata["sip_participant_identity"] = participant.identity
             logger.info("SIP participant joined: identity=%s", participant.identity)
 
+    @session.on("user_input_transcribed")
+    def _on_transcript(ev):
+        if not getattr(ev, "is_final", False):
+            return
+        text = (ev.transcript or "").strip()
+        if not text:
+            return
+        logger.info("USER FINAL: %r", text)
+        cand = _normalize_email(text)
+        if _EMAIL_RE.fullmatch(cand):
+            session.userdata["last_email_candidate"] = cand
+            logger.info("captured email candidate: %s", cand)
+
+    @session.on("conversation_item_added")
+    def _on_item(ev):
+        try:
+            item = ev.item
+            logger.info("CONV %s: %r", getattr(item, "role", "?"), (item.text_content or "")[:200])
+        except Exception:
+            pass
+
+    @session.on("function_tools_executed")
+    def _on_tools(ev):
+        try:
+            for fc in (ev.function_calls or []):
+                logger.info("TOOL CALL: %s args=%s", fc.name, fc.arguments)
+        except Exception:
+            logger.exception("tool log failed")
+
     for p in ctx.room.remote_participants.values():
         if p.kind == rtc.ParticipantKind.PARTICIPANT_KIND_SIP:
             session.userdata["sip_participant_identity"] = p.identity
@@ -194,7 +303,12 @@ def prewarm(proc):
 
 
 if __name__ == "__main__":
-    logging.basicConfig(level=logging.INFO)
+    _log_path = os.environ.get("ENIGMA_LOG_FILE", "/tmp/enigma-voice.log")
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s %(levelname)s %(name)s %(message)s",
+        handlers=[logging.StreamHandler(), logging.FileHandler(_log_path, mode="a")],
+    )
     cli.run_app(
         WorkerOptions(
             entrypoint_fnc=entrypoint,

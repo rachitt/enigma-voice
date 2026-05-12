@@ -25,6 +25,7 @@ _EMAIL_KEYTERMS = [
     "proton.me",
     "protonmail.com",
     "enigmalabs.dev",
+    "itsenigma.org",
     "at sign",
     "underscore",
     "dash",

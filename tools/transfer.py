@@ -22,14 +22,14 @@ async def transfer_call_tool(ctx: RunContext, reason: str = "caller asked for hu
     target = os.environ.get("TRANSFER_DESTINATION", "")
     if not target:
         logger.error("transfer_call_tool: TRANSFER_DESTINATION not set")
-        return "Say: 'Sorry, I can't transfer right now. Please email hello@enigmalabs.dev.' Then call end_call_tool."
+        return "Say: 'Sorry, I can't transfer right now. Please email contact@itsenigma.org.' Then call end_call_tool."
 
     sip_identity = (
         ctx.session.userdata.get("sip_participant_identity") if ctx.session.userdata else None
     )
     if not sip_identity:
         logger.error("transfer_call_tool: no sip_participant_identity in userdata")
-        return "Say: 'I'm having trouble transferring. Please email hello@enigmalabs.dev.' Then call end_call_tool."
+        return "Say: 'I'm having trouble transferring. Please email contact@itsenigma.org.' Then call end_call_tool."
 
     transfer_to = target if target.startswith("sip:") or target.startswith("tel:") else f"tel:{target}"
 
@@ -49,7 +49,7 @@ async def transfer_call_tool(ctx: RunContext, reason: str = "caller asked for hu
         )
     except Exception as e:
         logger.exception("SIP REFER failed: %s", e)
-        return "Say: 'The transfer failed. Please email hello@enigmalabs.dev.' Then call end_call_tool."
+        return "Say: 'The transfer failed. Please email contact@itsenigma.org.' Then call end_call_tool."
     finally:
         await lkapi.aclose()
 
