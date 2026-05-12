@@ -1,0 +1,203 @@
+{
+  "name": "Book Event",
+  "nodes": [
+    {
+      "parameters": {
+        "workflowInputs": {
+          "values": [
+            {
+              "name": "startTime"
+            },
+            {
+              "name": "endTime"
+            },
+            {
+              "name": "email"
+            },
+            {
+              "name": "eventSummary"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        0,
+        0
+      ],
+      "id": "22353052-7c9b-411b-ad39-e5d5d6731775",
+      "name": "When Executed by Another Workflow"
+    },
+    {
+      "parameters": {
+        "calendar": {
+          "__rl": true,
+          "value": "nateherk88@gmail.com",
+          "mode": "list",
+          "cachedResultName": "nateherk88@gmail.com"
+        },
+        "start": "={{ $json.startTime }}",
+        "end": "={{ $json.endTime }}",
+        "additionalFields": {
+          "attendees": [
+            "={{ $json.email }}"
+          ],
+          "summary": "={{ $json.eventSummary }}"
+        }
+      },
+      "type": "n8n-nodes-base.googleCalendar",
+      "typeVersion": 1.3,
+      "position": [
+        208,
+        0
+      ],
+      "id": "a054dc41-ee13-4f97-941c-1b31fd689199",
+      "name": "Create an event",
+      "credentials": {
+        "googleCalendarOAuth2Api": {
+          "id": "HYMNtkm0oglf42QP",
+          "name": "Google Calendar account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "10AgDO-r3qUk8y2HoYW8pw13dkkyHLqf1XB93ou9nGBE",
+          "mode": "list",
+          "cachedResultName": "Hercules Detailing CRM",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/10AgDO-r3qUk8y2HoYW8pw13dkkyHLqf1XB93ou9nGBE/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 2008710317,
+          "mode": "list",
+          "cachedResultName": "Appointment Log",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/10AgDO-r3qUk8y2HoYW8pw13dkkyHLqf1XB93ou9nGBE/edit#gid=2008710317"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Email": "={{ $('When Executed by Another Workflow').item.json.email }}",
+            "Appointment Type": "={{ $('When Executed by Another Workflow').item.json.eventSummary }}",
+            "Date": "={{ $('When Executed by Another Workflow').item.json.startTime }}",
+            "Notes": "Appointment Booked",
+            "ID": "={{ $json.id }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "ID",
+              "displayName": "ID",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Email",
+              "displayName": "Email",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Appointment Type",
+              "displayName": "Appointment Type",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Date",
+              "displayName": "Date",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Notes",
+              "displayName": "Notes",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        416,
+        0
+      ],
+      "id": "df70fe48-af59-4823-be35-cc7106c4f139",
+      "name": "Append row in sheet",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "vjJ9PbCDOkVNZZRJ",
+          "name": "Google Sheets account"
+        }
+      }
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "When Executed by Another Workflow": {
+      "main": [
+        [
+          {
+            "node": "Create an event",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create an event": {
+      "main": [
+        [
+          {
+            "node": "Append row in sheet",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "bc2ef215-7655-46f1-afc7-f68a3895320d",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "95e5a8c2e51c83e33b232ea792bbe3f063c094c33d9806a5565cb31759e1ad39"
+  },
+  "id": "8yaftmziuv0Inq7y",
+  "tags": [
+    {
+      "updatedAt": "2025-12-04T17:30:07.899Z",
+      "createdAt": "2025-12-04T17:30:07.899Z",
+      "id": "VJ2tq4FyVo3uEeSS",
+      "name": "Vapi MCP"
+    }
+  ]
+}
