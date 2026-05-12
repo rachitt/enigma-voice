@@ -1,0 +1,120 @@
+{
+  "name": "Hercules Receptionist EOC Report",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "e72f9562-b2f2-409d-8d22-77bd38ba9841",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        0,
+        0
+      ],
+      "id": "c15cb777-b83a-4b92-abbe-12ee54aedbea",
+      "name": "Webhook",
+      "webhookId": "e72f9562-b2f2-409d-8d22-77bd38ba9841"
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "10AgDO-r3qUk8y2HoYW8pw13dkkyHLqf1XB93ou9nGBE",
+          "mode": "list",
+          "cachedResultName": "Hercules Detailing CRM",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/10AgDO-r3qUk8y2HoYW8pw13dkkyHLqf1XB93ou9nGBE/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 1987456054,
+          "mode": "list",
+          "cachedResultName": "Call Log",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/10AgDO-r3qUk8y2HoYW8pw13dkkyHLqf1XB93ou9nGBE/edit#gid=1987456054"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Date": "={{ $now.format('yyyy-MM-dd hh:mm a') }}",
+            "Summary": "={{ $json.body.message.analysis.summary }}",
+            "Outcome": "={{ $json.body.message.analysis.structuredData.Outcome }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "Date",
+              "displayName": "Date",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Summary",
+              "displayName": "Summary",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Outcome",
+              "displayName": "Outcome",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        208,
+        0
+      ],
+      "id": "5a4cf12a-b8eb-41cf-8a1c-32002eec7bfc",
+      "name": "Append row in sheet",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "vjJ9PbCDOkVNZZRJ",
+          "name": "Google Sheets account"
+        }
+      }
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Append row in sheet",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "d8bc95fb-8210-46a9-9724-2ac92e5c71ec",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "95e5a8c2e51c83e33b232ea792bbe3f063c094c33d9806a5565cb31759e1ad39"
+  },
+  "id": "vekIViuKTZUvbSd9",
+  "tags": []
+}
